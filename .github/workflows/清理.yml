@@ -1,0 +1,300 @@
+name: 仓库操作管理工具
+on:
+  workflow_dispatch:
+    inputs:
+      # 功能开关（默认全关，可同时开启多个）
+      clean_all_switch:
+        description: "清理所有工作流记录"
+        type: boolean
+        required: true
+        default: false
+      clean_failed_switch:
+        description: "清理失败的工作流记录"
+        type: boolean
+        required: true
+        default: false
+      keep_5_switch:
+        description: "保留最新5条工作流记录"
+        type: boolean
+        required: true
+        default: false
+      delete_file_switch:
+        description: "删除工作流文件"
+        type: boolean
+        required: true
+        default: false
+      clean_commits_switch:
+        description: "彻底清除提交记录（不可逆）"
+        type: boolean
+        required: true
+        default: false
+      clean_releases_switch:
+        description: "一键清理私人仓库Release（API直连版）"
+        type: boolean
+        required: true
+        default: false
+      backup_repo_switch:
+        description: "一键备份整个仓库文件（排除.git目录，Artifacts下载）"
+        type: boolean
+        required: true
+        default: false
+      clean_all_tags_switch:  # 新增：清理所有Tag开关
+        description: "一键清理仓库所有Tag（不可逆）"
+        type: boolean
+        required: true
+        default: false
+
+      # 附加参数（仅对应开关开启时填写）
+      file:
+        description: "要删除的工作流文件名（仅delete_file_switch开启时填写，如test.yml）"
+        required: false
+        default: ""
+      main_branch:
+        description: "仓库主分支名（仅clean_commits_switch开启时填写，默认main）"
+        required: false
+        default: "master"
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # 拉取完整提交历史（适配所有功能）
+
+      # 移除单开关校验，支持多开关同时运行
+      - name: 功能开关状态确认
+        run: |
+          echo "🔍 当前开启的功能开关："
+          [ "${{ github.event.inputs.clean_all_switch }}" = "true" ] && echo "- 清理所有工作流记录"
+          [ "${{ github.event.inputs.clean_failed_switch }}" = "true" ] && echo "- 清理失败的工作流记录"
+          [ "${{ github.event.inputs.keep_5_switch }}" = "true" ] && echo "- 保留最新5条工作流记录"
+          [ "${{ github.event.inputs.delete_file_switch }}" = "true" ] && echo "- 删除工作流文件（文件：${{ github.event.inputs.file }}）"
+          [ "${{ github.event.inputs.clean_commits_switch }}" = "true" ] && echo "- 彻底清除提交记录（主分支：${{ github.event.inputs.main_branch }}）"
+          [ "${{ github.event.inputs.clean_releases_switch }}" = "true" ] && echo "- 清理私人仓库Release"
+          [ "${{ github.event.inputs.backup_repo_switch }}" = "true" ] && echo "- 备份仓库文件（排除.git目录）"
+          [ "${{ github.event.inputs.clean_all_tags_switch }}" = "true" ] && echo "- 清理仓库所有Tag（不可逆）"  # 新增：显示开关状态
+          echo "✅ 功能开关确认完成，开始执行对应操作"
+
+      # 1. 清理所有工作流记录（原有）
+      - name: 清理所有记录
+        if: github.event.inputs.clean_all_switch == 'true'
+        env:
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+        run: |
+          WORKFLOWS=$(curl -s --max-time 10 -H "Authorization: token $TOKEN" "https://api.github.com/repos/$REPO/actions/workflows" | jq -r '.workflows[].id // "no_workflow"')
+          if [ "$WORKFLOWS" = "no_workflow" ]; then
+            echo "ℹ️ 未找到可用工作流，无需清理"
+            exit 0
+          fi
+          for id in $WORKFLOWS; do
+            RUNS=$(curl -s --max-time 10 -H "Authorization: token $TOKEN" "https://api.github.com/repos/$REPO/actions/workflows/$id/runs?per_page=100" | jq -r '.workflow_runs[].id // "no_run"')
+            if [ "$RUNS" = "no_run" ]; then
+              echo "ℹ️ 工作流$id无记录"
+              continue
+            fi
+            for run in $RUNS; do
+              curl -s --max-time 5 -X DELETE -H "Authorization: token $TOKEN" "https://api.github.com/repos/$REPO/actions/runs/$run"
+            done
+          done
+          echo "✅ 所有记录清理完成"
+      
+      # 2. 清理失败的工作流记录（原有）
+      - name: 清理失败记录
+        if: github.event.inputs.clean_failed_switch == 'true'
+        env:
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+        run: |
+          WORKFLOWS=$(curl -s --max-time 10 -H "Authorization: token $TOKEN" "https://api.github.com/repos/$REPO/actions/workflows" | jq -r '.workflows[].id // "no_workflow"')
+          if [ "$WORKFLOWS" = "no_workflow" ]; then
+            echo "ℹ️ 未找到可用工作流，无需清理失败记录"
+            exit 0
+          fi
+          for id in $WORKFLOWS; do
+            RUNS=$(curl -s --max-time 10 -H "Authorization: token $TOKEN" "https://api.github.com/repos/$REPO/actions/workflows/$id/runs?status=failure&per_page=100" | jq -r '.workflow_runs[].id // "no_run"')
+            if [ "$RUNS" = "no_run" ]; then
+              echo "ℹ️ 工作流$id无失败记录"
+              continue
+            fi
+            for run in $RUNS; do
+              curl -s --max-time 5 -X DELETE -H "Authorization: token $TOKEN" "https://api.github.com/repos/$REPO/actions/runs/$run"
+            done
+          done
+          echo "✅ 失败记录清理完成"
+      
+      # 3. 保留最新5条工作流记录（原有）
+      - name: 保留最新5条记录
+        if: github.event.inputs.keep_5_switch == 'true'
+        env:
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+        run: |
+          WORKFLOWS=$(curl -s --max-time 10 -H "Authorization: token $TOKEN" "https://api.github.com/repos/$REPO/actions/workflows" | jq -r '.workflows[].id // "no_workflow"')
+          if [ "$WORKFLOWS" = "no_workflow" ]; then
+            echo "ℹ️ 未找到可用工作流，无需保留记录"
+            exit 0
+          fi
+          for id in $WORKFLOWS; do
+            RUNS=$(curl -s --max-time 10 -H "Authorization: token $TOKEN" "https://api.github.com/repos/$REPO/actions/workflows/$id/runs?per_page=100" | jq -r '.workflow_runs[].id // "no_run"')
+            if [ "$RUNS" = "no_run" ]; then
+              echo "ℹ️ 工作流$id无记录"
+              continue
+            fi
+            TOTAL=$(echo "$RUNS" | wc -l)
+            if [ "$TOTAL" -le 5 ]; then
+              echo "ℹ️ 工作流$id记录数≤5，无需删除"
+              continue
+            fi
+            RUNS_TO_DELETE=$(echo "$RUNS" | tail -n +6)
+            for run in $RUNS_TO_DELETE; do
+              curl -s --max-time 5 -X DELETE -H "Authorization: token $TOKEN" "https://api.github.com/repos/$REPO/actions/runs/$run"
+            done
+          done
+          echo "✅ 已保留最新5条记录"
+      
+      # 4. 删除工作流文件（原有）
+      - name: 删除工作流文件
+        if: github.event.inputs.delete_file_switch == 'true'
+        env:
+          FILE: ${{ github.event.inputs.file }}
+        run: |
+          if [ -z "$FILE" ]; then
+            echo "❌ 错误：开启delete_file_switch后，必须填写file参数"
+            exit 1
+          fi
+          FILE_PATH=".github/workflows/$FILE"
+          if [ -f "$FILE_PATH" ]; then
+            rm -f "$FILE_PATH"
+            git config --global user.name "GitHub Actions"
+            git config --global user.email "actions@github.com"
+            git add . && git commit -m "Delete workflow file: $FILE" && git push
+            echo "✅ 已删除文件：$FILE"
+          else
+            echo "❌ 错误：文件不存在：$FILE_PATH"
+            exit 1
+          fi
+      
+      # 5. 彻底清除提交记录（原有，支持空白提交）
+      - name: 彻底清除提交记录
+        if: github.event.inputs.clean_commits_switch == 'true'
+        env:
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          MAIN_BRANCH: ${{ github.event.inputs.main_branch }}
+        run: |
+          if [ -z "$MAIN_BRANCH" ]; then
+            echo "❌ 错误：开启clean_commits_switch后，必须填写main_branch参数"
+            exit 1
+          fi
+          git config --global --add safe.directory /github/workspace
+          echo "⚠️  警告：此操作会彻底删除所有提交历史，仅保留当前文件，不可恢复！"
+          git config --global user.name "ettyui"
+          git config --global user.email "ettyui@users.noreply.github.com"
+          git checkout $MAIN_BRANCH
+          git checkout --orphan temp_branch
+          git add -A
+          git commit --allow-empty-message -m ""
+          git branch -D $MAIN_BRANCH
+          git branch -m $MAIN_BRANCH
+          git push -f https://x-access-token:${TOKEN}@github.com/${REPO}.git $MAIN_BRANCH
+          echo "✅ 提交记录已彻底清除"
+      
+      # 6. 一键清理私人仓库Release（原有）
+      - name: 一键清理私人仓库Release（API直连版）
+        if: github.event.inputs.clean_releases_switch == 'true'
+        env:
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+        run: |
+          # 通过API获取所有Release ID
+          RELEASE_IDS=$(curl -s -H "Authorization: token $TOKEN" \
+            "https://api.github.com/repos/$REPO/releases" | jq '.[].id')
+          
+          if [ -z "$RELEASE_IDS" ] || [ "$RELEASE_IDS" = "null" ]; then
+            echo "ℹ️  私人仓库无Release可清理"
+            exit 0
+          fi
+          
+          # 循环删除每个Release（API会自动清理关联标签）
+          for id in $RELEASE_IDS; do
+            echo "🗑️  删除Release ID: $id"
+            curl -s -X DELETE -H "Authorization: token $TOKEN" \
+              "https://api.github.com/repos/$REPO/releases/$id"
+          done
+          
+          echo "✅ 私人仓库所有Release及关联标签已清理完成"
+      
+      # 7. 备份整个仓库文件（排除.git目录）
+      - name: 一键备份整个仓库文件
+        if: github.event.inputs.backup_repo_switch == 'true'
+        run: |
+          echo "=== 开始备份整个仓库文件 ==="
+          # 创建备份目录，避免递归复制
+          rm -rf repo-backup
+          mkdir -p repo-backup
+          # 复制仓库文件（排除.git和备份目录）
+          rsync -a --exclude='./.git' --exclude='./repo-backup' ./ repo-backup/
+          
+          # 统计备份文件数量
+          FILE_COUNT=$(find repo-backup -type f | wc -l)
+          echo "📁 共备份 $FILE_COUNT 个文件"
+          
+          # 压缩为ZIP包（命名包含仓库名和北京时间）
+          REPO_NAME=$(echo "${{ github.repository }}" | awk -F '/' '{print $2}')
+          BACKUP_NAME="${REPO_NAME}-repo-backup-$(TZ='Asia/Shanghai' date +%Y%m%d-%H%M%S).zip"
+          zip -qr -1 "$BACKUP_NAME" repo-backup/
+          
+          echo "✅ 仓库备份完成 → $BACKUP_NAME"
+          echo "BACKUP_FILE=$BACKUP_NAME" >> $GITHUB_ENV
+          echo "FILE_COUNT=$FILE_COUNT" >> $GITHUB_ENV
+
+      # 8. 上传备份包（可直接下载）
+      - name: 上传仓库备份包
+        if: github.event.inputs.backup_repo_switch == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.BACKUP_FILE }}
+          path: ${{ env.BACKUP_FILE }}
+          retention-days: 30  # 备份包保留30天，到期自动删除
+
+      # 9. 备份完成输出
+      - name: 备份完成提示
+        if: github.event.inputs.backup_repo_switch == 'true'
+        run: |
+          echo "✅ 仓库备份成功！共备份 ${{ env.FILE_COUNT }} 个文件"
+          echo "📥 可在下方“Artifacts”中下载备份包（保留30天）"
+          echo "⚠️  备份包含仓库所有文件（排除.git），建议本地另行存档"
+
+      # 新增：10. 一键清理仓库所有Tag（不可逆）
+      - name: 一键清理仓库所有Tag
+        if: github.event.inputs.clean_all_tags_switch == 'true'
+        env:
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+        run: |
+          echo "⚠️  警告：此操作会删除仓库所有Tag，不可恢复！"
+          # 通过API获取所有Tag名称（排除轻量级标签，确保全覆盖）
+          TAG_NAMES=$(curl -s -H "Authorization: token $TOKEN" \
+            "https://api.github.com/repos/$REPO/tags" | jq -r '.[].name')
+          
+          if [ -z "$TAG_NAMES" ] || [ "$TAG_NAMES" = "null" ] || [ "$TAG_NAMES" = "" ]; then
+            echo "ℹ️  仓库无Tag可清理"
+            exit 0
+          fi
+          
+          # 循环删除每个Tag（支持批量删除，跳过空值）
+          echo "🗑️  开始删除所有Tag："
+          echo "$TAG_NAMES" | while read -r tag; do
+            if [ -n "$tag" ]; then
+              echo "→ 删除Tag: $tag"
+              curl -s -X DELETE -H "Authorization: token $TOKEN" \
+                "https://api.github.com/repos/$REPO/git/refs/tags/$tag"
+            fi
+          done
+          
+          echo "✅ 仓库所有Tag已清理完成"

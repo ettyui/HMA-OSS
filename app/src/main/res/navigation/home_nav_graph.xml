@@ -1,0 +1,164 @@
+<?xml version="1.0" encoding="utf-8"?>
+<navigation xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/home_nav_graph"
+    app:startDestination="@id/nav_home">
+
+    <fragment
+        android:id="@+id/nav_home"
+        android:name="org.frknkrc44.hma_oss.ui.fragment.HomeFragment"
+        android:label="@string/title_home" />
+
+    <fragment
+        android:id="@+id/nav_logs"
+        android:name="icu.nullptr.hidemyapplist.ui.fragment.LogsFragment"
+        android:label="@string/title_logs" />
+
+    <fragment
+        android:id="@+id/nav_settings"
+        android:name="icu.nullptr.hidemyapplist.ui.fragment.SettingsFragment"
+        android:label="@string/title_settings" />
+
+    <fragment
+        android:id="@+id/nav_about"
+        android:name="org.frknkrc44.hma_oss.ui.fragment.AboutFragment"
+        android:label="@string/title_about" />
+
+    <fragment
+        android:id="@+id/nav_template_manage"
+        android:name="icu.nullptr.hidemyapplist.ui.fragment.TemplateManageFragment"
+        android:label="@string/title_template_manage" />
+
+    <fragment
+        android:id="@+id/nav_presets"
+        android:name="org.frknkrc44.hma_oss.ui.fragment.PresetManageFragment"
+        android:label="@string/title_preset_manage" />
+
+    <fragment
+        android:id="@+id/nav_template_settings"
+        android:name="icu.nullptr.hidemyapplist.ui.fragment.TemplateSettingsFragment"
+        android:label="@string/title_template_settings">
+
+        <argument
+            android:name="name"
+            app:argType="string"
+            app:nullable="true" />
+
+        <argument
+            android:name="isWhiteList"
+            app:argType="boolean" />
+
+    </fragment>
+
+    <fragment
+        android:id="@+id/nav_setting_template_conf"
+        android:name="org.frknkrc44.hma_oss.ui.fragment.SettingsTemplateConfFragment"
+        android:label="@string/title_settings_template_conf">
+
+        <argument
+            android:name="name"
+            app:argType="string"
+            app:nullable="true" />
+
+    </fragment>
+
+    <fragment
+        android:id="@+id/nav_app_manage"
+        android:name="icu.nullptr.hidemyapplist.ui.fragment.AppManageFragment"
+        android:label="@string/title_app_manage" />
+
+    <fragment
+        android:id="@+id/nav_preset_inner_manage"
+        android:name="org.frknkrc44.hma_oss.ui.fragment.AppPresetFragment">
+
+        <argument
+            android:name="name"
+            app:argType="string" />
+
+        <argument
+            android:name="title"
+            app:argType="string" />
+
+    </fragment>
+
+    <fragment
+        android:id="@+id/nav_settings_templates_edit_setting"
+        android:name="org.frknkrc44.hma_oss.ui.fragment.EditSettingFragment">
+
+        <argument
+            android:name="database"
+            app:argType="string"
+            app:nullable="true" />
+
+        <argument
+            android:name="name"
+            app:argType="string" />
+
+        <argument
+            android:name="value"
+            app:argType="string"
+            app:nullable="true" />
+
+    </fragment>
+
+    <fragment
+        android:id="@+id/nav_settings_preset_inner_manage"
+        android:name="org.frknkrc44.hma_oss.ui.fragment.SettingsPresetFragment">
+
+        <argument
+            android:name="name"
+            app:argType="string" />
+
+        <argument
+            android:name="title"
+            app:argType="string" />
+
+    </fragment>
+
+    <fragment
+        android:id="@+id/nav_settings_template_inner_manage"
+        android:name="org.frknkrc44.hma_oss.ui.fragment.SettingsTemplateInnerFragment">
+
+        <argument
+            android:name="items"
+            app:argType="android.os.Bundle" />
+
+    </fragment>
+
+    <fragment
+        android:id="@+id/nav_app_settings"
+        android:name="icu.nullptr.hidemyapplist.ui.fragment.AppSettingsFragment"
+        android:label="@string/title_app_settings">
+
+        <argument
+            android:name="packageName"
+            app:argType="string" />
+
+    </fragment>
+
+    <fragment
+        android:id="@+id/nav_scope"
+        android:name="icu.nullptr.hidemyapplist.ui.fragment.ScopeFragment"
+        android:label="@string/title_app_select">
+
+        <argument
+            android:name="filterOnlyEnabled"
+            app:argType="boolean" />
+
+        <argument
+            android:name="isOpposite"
+            app:argType="boolean"
+            android:defaultValue="false" />
+
+        <argument
+            android:name="isWhiteList"
+            android:defaultValue="false"
+            app:argType="boolean" />
+
+        <argument
+            android:name="checked"
+            app:argType="string[]" />
+
+    </fragment>
+
+</navigation>
