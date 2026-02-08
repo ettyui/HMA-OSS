@@ -1,0 +1,40 @@
+name: 一键恢复上游 workflows 文件
+on:
+  workflow_dispatch:  # 手动触发，点一下就执行
+
+jobs:
+  restore-workflows:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write  # 仅需要写入文件的权限（自动授权）
+    steps:
+      - name: 拉取自己的仓库
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: 添加上游仓库并拉取文件
+        run: |
+          # 添加上游原仓库
+          git remote add upstream https://github.com/frknkrc44/HMA-OSS.git || true
+          # 拉取上游最新代码
+          git fetch upstream
+          # 强制拉取上游的 4 个 workflows 文件（直接覆盖/创建）
+          git checkout upstream/master -- .github/workflows/crowdin.yml
+          git checkout upstream/master -- .github/workflows/issue.yml
+          git checkout upstream/master -- .github/workflows/main.yml
+          git checkout upstream/master -- .github/workflows/pull_request.yml
+
+      - name: 提交并推送回自己的仓库
+        run: |
+          git config --global user.name "GitHub Actions"
+          git config --global user.email "actions@github.com"
+          # 检查文件是否存在，存在则提交
+          if [ -d ".github/workflows" ]; then
+            git add .github/workflows/*
+            git commit -m "一键恢复上游 workflows 文件"
+            git push origin master  # 分支不对请修改为你的分支（如 main）
+            echo "✅ 4 个文件已成功恢复！"
+          else
+            echo "❌ 未拉取到上游文件，请检查上游仓库路径"
+          fi
